@@ -1,6 +1,7 @@
 package dhtlistener
 
 import (
+	"net"
 	"testing"
 )
 
@@ -41,6 +42,55 @@ func TestI64toA(t *testing.T) {
 			if v != c.out[k] {
 				t.Fatal(c.in, k, v)
 			}
+		}
+	}
+}
+
+func TestDecodeCompactIPPortInfo(t *testing.T) {
+	cases := []struct {
+		in  string
+		out struct {
+			ip   net.IP
+			port int
+		}
+	}{
+		{"111111", struct {
+			ip   net.IP
+			port int
+		}{ip: []byte("1111"), port: 12593}},
+	}
+	for _, c := range cases {
+		ip, port, err := decodeCompactIPPortInfo(c.in)
+		if err != nil {
+			t.Fatal(c, err)
+		}
+		if ip.String() != c.out.ip.String() || port != c.out.port {
+			t.Fatal(ip, port, c.out.ip, c.out.port)
+		}
+	}
+}
+
+func TestEncodeCompactIPPortInfo(t *testing.T) {
+	cases := []struct {
+		in struct {
+			ip   net.IP
+			port int
+		}
+		out string
+	}{
+		{struct {
+			ip   net.IP
+			port int
+		}{ip: []byte("1111"), port: 12593},
+			"111111"},
+	}
+	for _, c := range cases {
+		compact, err := encodeCompactIPPortInfo(c.in.ip, c.in.port)
+		if err != nil {
+			t.Fatal(c, err)
+		}
+		if compact != c.out {
+			t.Fatal(compact, c.out)
 		}
 	}
 }
