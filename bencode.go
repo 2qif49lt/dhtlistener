@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 func Encode(data interface{}) (string, error) {
@@ -107,7 +108,150 @@ func encodeStruct(v reflect.Value) (string, error) {
 	}
 	return EncodeMap(m)
 }
+
 func EncodeStruct(data interface{}) (string, error) {
 	v := reflect.Indirect(reflect.ValueOf(data))
 	return encodeStruct(v)
+}
+
+// decodeInt decode data string which format is assumed as i...e
+func decodeInt(data []byte, v reflect.Value) error {
+	numStr := data[1 : len(data)-1]
+	num, err := strconv.Atoi(string(numStr))
+
+	v.SetInt(int64(num))
+	return err
+}
+
+func decodeUint(data []byte, v reflect.Value) error {
+	numStr := data[1 : len(data)-1]
+	num, err := strconv.Atoi(string(numStr))
+
+	v.SetUint(uint64(num))
+	return err
+}
+
+func decodeInteger(data []byte, v reflect.Value) error {
+	if v.Type().Kind() <= reflect.Int64 {
+		return decodeInt(data, v)
+	} else {
+		return decodeUint(data, v)
+	}
+}
+
+// decodeString decode data string which format is assumed as num:content
+func decodeString(data []byte, v reflect.Value) error {
+	idx := strings.Index(string(data), ":")
+	if idx == -1 {
+		return fmt.Errorf("format wrong")
+	}
+	nums, err := strconv.Atoi(data[:idx])
+	if err != nil {
+		return err
+	}
+	if nums <= 0 {
+		return fmt.Errorf("number is invaild")
+	}
+
+	if nums != len(data[idx+1:]) {
+		return fmt.Errorf("number is not right")
+	}
+	v.SetString(string(data[idx+1:]))
+	return nil
+}
+
+func parseInt(data []byte, start int, v reflect.Value) (end int, err error) {
+	end = strings.Index(string(data[start+1:]), "e")
+	if end == -1 {
+		err = errors.New("parseInt donot find end tag")
+		return
+	}
+	end += start + 1 + 1
+	err = decodeInteger(data[start:end], v)
+	//	num, err = strconv.Atoi(string(data[start+1 : end]))
+	return
+}
+func parseString(data []byte, start int, v reflect.Value) (end int, err error) {
+	mid := strings.Index(string(data[start:]), ":")
+	if end == -1 {
+		err = errors.New("parseInt donot find end tag")
+		return
+	}
+	mid += start
+
+	num := 0
+	num, err = strconv.Atoi(string(data[start:mid]))
+	if err != nil {
+		return
+	}
+	if len(data[mid+1:]) < num {
+		err = errors.New("parseString string length is short")
+		return
+	}
+	end = mid + num + 1
+	v.SetString(string(data[mid+1 : end]))
+	return
+}
+
+// DecodeSlice deco date string which format is assumed as l...e,out'elements are all original byte
+func decodeSlice(data []byte, v reflect.Value) error {
+	content := data[1 : len(data)-1]
+
+	size := v.Len()
+	cur := 0
+	s := NewStack()
+	idx := 0
+	for idx <= len(content) {
+		end := 0
+		var err error = nil
+		switch content[idx] {
+		case 'i':
+			end, err = parseInt(data, idx, v.Index(cur))
+		case 'l':
+			{
+			}
+		case 'd':
+			{
+			}
+		default:
+			end, err = parseString(data, idx, v.Index(cur))
+		}
+		if err != nil {
+			return err
+		}
+		idx = end
+		cur++
+	}
+}
+
+func Decode(data []byte, out interface{}) error {
+	v := reflect.ValueOf(out)
+	t := v.Type()
+	k := t.Kind()
+
+	if k == reflect.Slice {
+
+	} else if k == reflect.Ptr {
+		v = v.Elem()
+		k = v.Type().Kind()
+
+		switch {
+		case reflect.Invalid < k && k <= reflect.Int64:
+			return decodeInt(data, v)
+		case reflect.Uint <= k && k <= reflect.Uint64:
+			return decodeUInt(data, v)
+		case k == reflect.String:
+			return decodeString(data, v)
+		case k == reflect.Slice:
+			return decodeSlice(data, v)
+		case k == reflect.Map:
+			return encodeMap(v)
+		case k == reflect.Struct:
+			return encodeStruct(v)
+		default:
+			return "", errors.New("data type no support")
+		}
+	} else {
+		return fmt.Errorf("out type no support")
+	}
 }
