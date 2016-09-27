@@ -1,7 +1,13 @@
 package dhtlistener
 
+type typeIdx struct {
+	typeid int
+	beg    int
+	end    int
+}
+
 type stacknode struct {
-	value interface{}
+	value *typeIdx
 	next  *stacknode
 }
 type Stack struct {
@@ -20,7 +26,7 @@ func (s *Stack) Size() int {
 	return s.size
 }
 
-func (s *Stack) Push(v interface{}) {
+func (s *Stack) Push(v *typeIdx) {
 	n := &stacknode{
 		value: v,
 		next:  s.top,
@@ -29,7 +35,7 @@ func (s *Stack) Push(v interface{}) {
 	s.size++
 }
 
-func (s *Stack) Pop() interface{} {
+func (s *Stack) Pop() *typeIdx {
 	if s.size == 0 {
 		return nil
 	}
@@ -39,10 +45,17 @@ func (s *Stack) Pop() interface{} {
 	return n.value
 }
 
-func (s *Stack) Peek() interface{} {
+func (s *Stack) Peek() *typeIdx {
 	if s.size == 0 {
 		return nil
 	}
 
 	return s.top.value
 }
+
+const (
+	bencode_type_num = iota
+	bencode_type_str
+	bencode_type_list
+	bencode_type_map
+)
