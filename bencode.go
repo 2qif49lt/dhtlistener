@@ -130,13 +130,25 @@ func decodeUint(data []byte, v reflect.Value) error {
 	return err
 }
 
-func decodeInteger(data []byte, v reflect.Value) error {
-	if v.Type().Kind() != reflect.Ptr {
-		return errors.New("need point")
-	} else {
-		v = v.Elem()
-	}
+func decodeIntInterface(data []byte, v reflect.Value) error {
+	numStr := data[1 : len(data)-1]
+	num, err := strconv.Atoi(string(numStr))
 
+	v.Set(reflect.ValueOf(num))
+	return err
+}
+
+func decodeInteger(data []byte, v reflect.Value) error {
+	/*
+		if v.Type().Kind() != reflect.Ptr {
+			return fmt.Errorf("decodeInteger need point but get %s", v.Type().Kind())
+		} else {
+			v = v.Elem()
+		}
+	*/
+	if v.Type().Kind() == reflect.Interface {
+		return decodeIntInterface(data, v)
+	}
 	if v.Type().Kind() <= reflect.Int64 {
 		return decodeInt(data, v)
 	} else {
@@ -146,6 +158,7 @@ func decodeInteger(data []byte, v reflect.Value) error {
 
 // parseInt try to obtain number from the begin position start,return end position.
 func parseInt(data []byte, start int, v reflect.Value) (end int, err error) {
+	fmt.Println(string(data), start)
 	end = strings.Index(string(data[start:]), "e")
 	if end == -1 {
 		err = errors.New("parseInt donot find end tag")
@@ -157,25 +170,8 @@ func parseInt(data []byte, start int, v reflect.Value) (end int, err error) {
 	return
 }
 
-func findInt(data []byte, start int) (end int, err error) {
-	end = strings.Index(string(data[start:]), "e")
-	if end == -1 {
-		err = errors.New("findInt donot find end tag")
-		return
-	}
-	end += start
-
-	return
-}
-
 // decodeString decode data string which format is assumed as num:content
 func decodeString(data []byte, v reflect.Value) error {
-	if v.Type().Kind() != reflect.Ptr {
-		return errors.New("need point")
-	} else {
-		v = v.Elem()
-	}
-
 	idx := strings.Index(string(data), ":")
 	if idx == -1 {
 		return fmt.Errorf("format wrong")
@@ -191,13 +187,23 @@ func decodeString(data []byte, v reflect.Value) error {
 	if nums != len(data[idx+1:]) {
 		return fmt.Errorf("number is not right")
 	}
-	v.SetString(string(data[idx+1:]))
+	if v.Kind() == reflect.Interface {
+		v.Set(reflect.ValueOf(string(data[idx+1:])))
+	} else {
+		if v.Kind() != reflect.Ptr {
+			return errors.New("decodeString need point")
+		} else {
+			v = v.Elem()
+		}
+		v.SetString(string(data[idx+1:]))
+	}
+
 	return nil
 }
 
 func parseString(data []byte, start int, v reflect.Value) (end int, err error) {
 	if v.Type().Kind() != reflect.Ptr {
-		err = errors.New("need point")
+		err = errors.New("parseString need point")
 		return
 	} else {
 		v = v.Elem()
@@ -223,28 +229,6 @@ func parseString(data []byte, start int, v reflect.Value) (end int, err error) {
 	return
 }
 
-func findString(data []byte, start int) (end int, err error) {
-	mid := strings.Index(string(data[start:]), ":")
-	if end == -1 {
-		err = errors.New("findString donot find tag :")
-		return
-	}
-	mid += start
-
-	num := 0
-	num, err = strconv.Atoi(string(data[start:mid]))
-	if err != nil {
-		return
-	}
-	if len(data[mid+1:]) < num {
-		err = errors.New("parseString string length is short")
-		return
-	}
-	end = mid + num
-
-	return
-}
-
 func findMap(data []byte, start int) (end int, err error) {
 	if data[start] != 'd' {
 		err = errors.New("findMap format expect l")
@@ -253,6 +237,8 @@ func findMap(data []byte, start int) (end int, err error) {
 	return findType(bencode_type_map, data, start)
 
 }
+
+// findType fisrt type
 func findType(typeid int, data []byte, start int) (end int, err error) {
 	s := NewStack()
 	s.Push(&typeIdx{typeid, start, -1})
@@ -261,23 +247,35 @@ func findType(typeid int, data []byte, start int) (end int, err error) {
 	for idx != len(data[start:]) {
 		switch data[idx] {
 		case 'i':
+			fmt.Println("findType case i")
 			end, err = findInt(data, idx)
 		case 'l':
+			fmt.Println("findType case l")
+
 			s.Push(&typeIdx{bencode_type_list, idx, -1})
 			end, err = findSlice(data, idx)
 		case 'd':
-			s.Push(&typeIdx{bencode_type_map, idx, -1})
+			//	s.Push(&typeIdx{bencode_type_map, idx, -1})
 			end, err = findMap(data, idx)
 		case 'e':
+			fmt.Println("case e s.Size ", s.Size())
 			if sitem := s.Pop(); sitem != nil && s.Size() == 0 {
 				end = idx
+				fmt.Println("e return")
 				return
 			}
+			fmt.Println("s.Size ", s.Size())
+
 			idx++
 			continue
 		default:
 			end, err = findString(data, idx)
+			if err == nil {
+				fmt.Println("findType case string")
+
+			}
 		}
+		fmt.Println(string(data[idx : end+1]))
 
 		if err != nil {
 			return
@@ -285,7 +283,7 @@ func findType(typeid int, data []byte, start int) (end int, err error) {
 		idx = end + 1
 
 	}
-	return end, errors.New("can not find end tag")
+	return end, errors.New("findType can not find end tag")
 }
 func findSlice(data []byte, start int) (end int, err error) {
 	if data[start] != 'l' {
@@ -298,32 +296,60 @@ func findSlice(data []byte, start int) (end int, err error) {
 
 // DecodeSlice deco date string which format is assumed as l...e,out'elements are all original byte
 func decodeSlice(data []byte, v reflect.Value) error {
-	if data[0] != 'l' {
-		return errors.New("findSlice format expect l")
+	fmt.Println("decodeSlice", string(data), v.Interface())
+
+	size := v.Len()
+	cur := 0
+	idx := 0
+	for cur < size && idx < len(data) {
+		typeid, end, err := findFirstNode(data, idx)
+		if err != nil {
+			return err
+		}
+		switch typeid {
+		case bencode_type_num:
+			err = decodeInteger(data[idx:end+1], v.Index(cur))
+		case bencode_type_str:
+			err = decodeString(data[idx:end+1], v.Index(cur))
+		case bencode_type_list:
+			err = decodeSlice(data[idx:end+1], v.Index(cur))
+		case bencode_type_map:
+			err = decodeMap(data[idx:end+1], v.Index(cur))
+		default:
+			err = fmt.Errorf("type %d dont support", typeid)
+		}
+		if err != nil {
+			return err
+		}
+		idx = end + 1
 	}
-	return decodeType(data, v)
+	return nil
 }
 
 func decodeMap(data []byte, v reflect.Value) error {
-	if data[0] != 'd' {
-		return errors.New("findMap format expect l")
+	if v.Type().Key().Kind() != reflect.String && v.Type().Key().Kind() != reflect.Interface {
+		return fmt.Errorf("decodeMap expect string or interface ")
 	}
-
-	return decodeType(data, v)
+	return nil
 }
 
 func decodeType(data []byte, v reflect.Value) error {
-	content := data[1 : len(data)-1]
+	if v.Type().Kind() != reflect.Ptr {
+		return errors.New("decodeType need point")
+	} else {
+		v = v.Elem()
+	}
 
 	size := v.Len()
 	cur := 0
 	idx := 0
 
-	for idx <= len(content) && cur < size {
+	for idx <= len(data) && cur < size {
 		end := 0
 		var err error = nil
-		switch content[idx] {
+		switch data[idx] {
 		case 'i':
+			fmt.Println("decodeType case i", idx)
 			end, err = parseInt(data, idx, v.Index(cur))
 		case 'l':
 			if end, err = findSlice(data, idx); err == nil {
@@ -336,41 +362,13 @@ func decodeType(data []byte, v reflect.Value) error {
 		default:
 			end, err = parseString(data, idx, v.Index(cur))
 		}
+
 		if err != nil {
 			return err
 		}
+
 		idx = end + 1
 		cur++
 	}
 	return nil
-}
-func Decode(data []byte, out interface{}) error {
-	v := reflect.ValueOf(out)
-	t := v.Type()
-	k := t.Kind()
-
-	if k == reflect.Slice {
-
-	} else if k == reflect.Ptr {
-		v = v.Elem()
-		k = v.Type().Kind()
-
-		switch {
-		case reflect.Invalid < k && k <= reflect.Int64:
-			return decodeInt(data, v)
-		case reflect.Uint <= k && k <= reflect.Uint64:
-			return decodeUint(data, v)
-		case k == reflect.String:
-			return decodeString(data, v)
-		case k == reflect.Slice:
-			return decodeSlice(data, v)
-		case k == reflect.Map:
-			return decodeMap(data, v)
-		case k == reflect.Struct:
-			return nil
-		default:
-			return errors.New("data type no support")
-		}
-	}
-	return fmt.Errorf("out type no support")
 }

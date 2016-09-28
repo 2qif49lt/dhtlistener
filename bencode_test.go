@@ -241,5 +241,77 @@ func TestDecodeString(t *testing.T) {
 	if retstr != expect {
 		t.Fatal(retstr, in)
 	}
+}
 
+func TestFindFirstNode(t *testing.T) {
+	in := "li1e4:spamli1ei2eee"
+	expectid, expectend := bencode_type_list, len(in)-1
+	id, end, err := findFirstNode([]byte(in), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if expectend != end || expectid != id {
+		t.Fatal(id, end)
+	}
+}
+func TestDecodeall(t *testing.T) {
+	in := "li1e4:spamli1ei2eee"
+	out := []interface{}{1, "spam", []int{1, 2}}
+
+	rettmp := make([]interface{}, 3)
+
+	err := decodeSlice([]byte(in), reflect.ValueOf(rettmp))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println(rettmp, out)
+}
+
+func TestDecodex(t *testing.T) {
+	in := "12:hello,中国"
+	expect := "hello,中国"
+
+	out := ""
+	err := decodex([]byte(in), &out)
+	if err != nil || expect != out {
+		t.Fatal(out, err, expect)
+	}
+
+	in1 := "i42e"
+	expect1 := uint32(42)
+
+	out1 := uint32(0)
+	err = decodex([]byte(in1), &out1)
+	if err != nil || expect1 != out1 {
+		t.Fatal(out1, err, expect1)
+	}
+
+	in2 := "li42ei36ee"
+	expect2 := []int{42, 36}
+
+	out2 := []int{}
+	err = decodex([]byte(in2), &out2)
+
+	if err != nil {
+		t.Fatal(out2, err)
+	}
+
+	if reflect.DeepEqual(out2, expect2) == false {
+		t.Fatal(expect2, out2)
+	}
+
+	in3 := "l12:hello,中国4:spame"
+	expect3 := []string{"hello,中国", "spam"}
+
+	out3 := []string{}
+	err = decodex([]byte(in3), &out3)
+
+	if err != nil {
+		t.Fatal(out3, err)
+	}
+
+	if reflect.DeepEqual(out3, expect3) == false {
+		t.Fatal(expect3, out3)
+	}
 }
