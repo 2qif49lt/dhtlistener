@@ -41,7 +41,7 @@ func getInt(data []byte) (num int, err error) {
 func decodex(data []byte, v interface{}) error {
 	rv := reflect.ValueOf(v)
 	if rv.Kind() != reflect.Ptr || rv.IsNil() {
-		return fmt.Errorf("type dont support")
+		return fmt.Errorf("type dont support expect ptr, now:%s", rv.Kind())
 	}
 	rv = rv.Elem()
 	rk := rv.Kind()
@@ -52,13 +52,20 @@ func decodex(data []byte, v interface{}) error {
 		if err != nil {
 			return err
 		}
-
-		if rk <= reflect.Int64 {
+		if rk == reflect.Interface {
+			rv.Set(reflect.ValueOf(num))
+		} else if rk <= reflect.Int64 {
 			rv.SetInt(int64(num))
 		} else {
 			rv.SetUint(uint64(num))
 		}
 	case 'l':
+		if rk == reflect.Interface {
+			var x []interface{}
+			defer func(p reflect.Value) { p.Set(rv) }(rv)
+			rv = reflect.ValueOf(&x).Elem()
+		}
+
 		if rk != reflect.Slice {
 			return errors.New("need slice")
 		}
@@ -84,14 +91,55 @@ func decodex(data []byte, v interface{}) error {
 		}
 
 	case 'd':
+		if rv.Kind() == reflect.Interface {
+			var x map[string]interface{}
+			defer func(p reflect.Value) { p.Set(rv) }(rv)
+			rv = reflect.ValueOf(&x).Elem()
+		}
 
+		if rk != reflect.Map || rv.Type().Key().Kind() != reflect.String {
+			return errors.New("need map or map key need be string")
+		}
+		et := rv.Type().Elem() //element type
+
+		idx := 1
+		bkey := true
+		key := ""
+		keyval := reflect.ValueOf(&key).Elem()
+
+		for idx < len(data)-1 {
+			typeid, end, err := findFirstNode(data, idx)
+			if err != nil {
+				return err
+			}
+			if bkey && typeid != bencode_type_str {
+				return errors.New("expect type string")
+			}
+			if bkey {
+				keystr := ""
+				if keystr, err = getStr(data[idx : end+1]); err != nil {
+					return err
+				}
+				keyval.SetString(keystr)
+			} else {
+				elemVal := reflect.New(et)
+				elemit := elemVal.Interface()
+				err = decodex(data[idx:end+1], elemit)
+				if err != nil {
+					return err
+				}
+				rv.SetMapIndex(keyval, elemVal.Elem())
+			}
+
+			idx = end + 1
+			bkey = !bkey
+		}
 	default:
 		str, err := getStr(data)
 		if err != nil {
 			return err
 		}
-
-		rv.Set(reflect.ValueOf(str))
+		rv.SetString(str)
 	}
 
 	return nil

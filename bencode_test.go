@@ -152,97 +152,6 @@ func TestEncodeTop(t *testing.T) {
 	}
 }
 
-func TestDecodeInt(t *testing.T) {
-	in := "i42e"
-	var out uint = 42
-	var tmp uint = 0
-
-	if err := decodeInteger([]byte(in), reflect.ValueOf(&tmp)); err == nil {
-		fmt.Println(tmp, out)
-		if tmp != out {
-			t.Fatal(tmp, out)
-		}
-	} else {
-		t.Fatal(err)
-	}
-
-	in = "i-12345678e"
-	var out1 int = -12345678
-	var tmp1 int = 0
-	if err := decodeInteger([]byte(in), reflect.ValueOf(&tmp1)); err == nil {
-		fmt.Println(tmp1, out1)
-		if tmp1 != out1 {
-			t.Fatal(tmp1, out1)
-		}
-	} else {
-		t.Fatal(err)
-	}
-}
-
-func TestParseInt(t *testing.T) {
-	in := "012345i42eabcdef"
-	start := 6
-	end := 9
-	var out uint32 = 42
-	var rettmp uint32 = 0
-
-	retend, err := findInt([]byte(in), start)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if retend != end {
-		t.Fatal(retend, end)
-	}
-
-	retend, err = parseInt([]byte(in), start, reflect.ValueOf(&out))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if retend != end && rettmp != out {
-		t.Fatal(retend, rettmp)
-	}
-
-}
-
-func TestDecodeString(t *testing.T) {
-	in := "0123454:spamabcde"
-	start := 6
-	end := 11
-	expect := "spam"
-	retstr := ""
-
-	retend, err := findString([]byte(in), start)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if retend != end {
-		t.Fatal(retend, end)
-	}
-
-	retend, err = parseString([]byte(in), start, reflect.ValueOf(&retstr))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if retend != end {
-		t.Fatal(retend, end)
-	}
-	if retstr != expect {
-		t.Fatal(retstr, in)
-	}
-
-	in = "12:hello,中国"
-	expect = "hello,中国"
-	err = decodeString([]byte(in), reflect.ValueOf(&retstr))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if retstr != expect {
-		t.Fatal(retstr, in)
-	}
-}
-
 func TestFindFirstNode(t *testing.T) {
 	in := "li1e4:spamli1ei2eee"
 	expectid, expectend := bencode_type_list, len(in)-1
@@ -253,19 +162,6 @@ func TestFindFirstNode(t *testing.T) {
 	if expectend != end || expectid != id {
 		t.Fatal(id, end)
 	}
-}
-func TestDecodeall(t *testing.T) {
-	in := "li1e4:spamli1ei2eee"
-	out := []interface{}{1, "spam", []int{1, 2}}
-
-	rettmp := make([]interface{}, 3)
-
-	err := decodeSlice([]byte(in), reflect.ValueOf(rettmp))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	fmt.Println(rettmp, out)
 }
 
 func TestDecodex(t *testing.T) {
@@ -313,5 +209,21 @@ func TestDecodex(t *testing.T) {
 
 	if reflect.DeepEqual(out3, expect3) == false {
 		t.Fatal(expect3, out3)
+	}
+
+	in4 := "d3:bar4:spam3:foo3:abce"
+	expect4 := map[string]string{"bar": "spam", "foo": "abc"}
+
+	//	out4 := make(map[string]string)
+	out4 := map[string]string{}
+	err = decodex([]byte(in4), &out4)
+
+	if err != nil {
+		t.Fatal(out4, err)
+	}
+	fmt.Println(out4)
+
+	if reflect.DeepEqual(out4, expect4) == false {
+		t.Fatal(expect4, out4)
 	}
 }
