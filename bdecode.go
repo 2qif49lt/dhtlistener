@@ -97,10 +97,12 @@ func decodex(data []byte, v interface{}) error {
 			rv = reflect.ValueOf(&x).Elem()
 		}
 
-		if rk != reflect.Map || rv.Type().Key().Kind() != reflect.String {
-			return errors.New("need map or map key need be string")
+		if rk != reflect.Map && rk != reflect.Struct {
+			return errors.New("need map or struct")
 		}
-		et := rv.Type().Elem() //element type
+		if rk == reflect.Map && rv.Type().Key().Kind() != reflect.String {
+			return errors.New("map key need be string")
+		}
 
 		idx := 1
 		bkey := true
@@ -122,13 +124,34 @@ func decodex(data []byte, v interface{}) error {
 				}
 				keyval.SetString(keystr)
 			} else {
-				elemVal := reflect.New(et)
-				elemit := elemVal.Interface()
-				err = decodex(data[idx:end+1], elemit)
-				if err != nil {
-					return err
+				if rk == reflect.Map {
+					elemVal := reflect.New(rv.Type().Elem())
+					elemit := elemVal.Interface()
+					err = decodex(data[idx:end+1], elemit)
+					if err != nil {
+						return err
+					}
+					rv.SetMapIndex(keyval, elemVal.Elem())
+				} else {
+					fieldType, fname, ok := findStructFieldName(rv, key)
+					fmt.Println(fieldType.Kind(), ok, fname)
+					if ok {
+						fieldVal := rv.FieldByName(fname)
+						if fieldVal.IsValid() {
+							newFieldVal := reflect.New(fieldType)
+							fieldit := newFieldVal.Interface()
+
+							err = decodex(data[idx:end+1], fieldit)
+							fmt.Println(fieldVal.String())
+							fieldVal.Set(newFieldVal.Elem())
+							if err != nil {
+								return err
+							}
+						}
+					}
+
 				}
-				rv.SetMapIndex(keyval, elemVal.Elem())
+
 			}
 
 			idx = end + 1
@@ -145,6 +168,24 @@ func decodex(data []byte, v interface{}) error {
 	return nil
 }
 
+// findStructFieldName try to get the field with the given name,empty string return if no field was found
+func findStructFieldName(v reflect.Value, name string) (reflect.Type, string, bool) {
+	t := v.Type()
+	for idx := 0; idx != t.NumField(); idx++ {
+		if v.Field(idx).CanInterface() {
+			fname := t.Field(idx).Name
+			if tagName := t.Field(idx).Tag.Get("json"); tagName != "" {
+				if tagName == name {
+					return t.Field(idx).Type, fname, true
+				}
+			}
+			if fname == name {
+				return t.Field(idx).Type, fname, true
+			}
+		}
+	}
+	return nil, "", false
+}
 func findFirstNode(data []byte, start int) (typeid, end int, err error) {
 	idx := start
 	size := len(data)

@@ -226,4 +226,27 @@ func TestDecodex(t *testing.T) {
 	if reflect.DeepEqual(out4, expect4) == false {
 		t.Fatal(expect4, out4)
 	}
+
+	in5 := "d2:id8:identify1:q4:ping1:t3:123e"
+	type testdecodest struct {
+		Q  string `json:"q"`
+		Id string `json:"id"`
+		T  string `json:"t"`
+	}
+	expect5 := testdecodest{
+		"ping",
+		"identify",
+		"123",
+	}
+	out5 := testdecodest{}
+	err = decodex([]byte(in5), &out5)
+
+	if err != nil {
+		t.Fatal(out5, err)
+	}
+	fmt.Println(out5)
+
+	if reflect.DeepEqual(out5, expect5) == false {
+		t.Fatal(expect5, out5)
+	}
 }

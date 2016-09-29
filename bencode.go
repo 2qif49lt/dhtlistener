@@ -98,6 +98,7 @@ func encodeStruct(v reflect.Value) (string, error) {
 	for idx := 0; idx != t.NumField(); idx++ {
 		if v.Field(idx).CanInterface() {
 			name := t.Field(idx).Name
+
 			if tagName := t.Field(idx).Tag.Get("json"); tagName != "" {
 				name = tagName
 			}
