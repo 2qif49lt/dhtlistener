@@ -9,6 +9,7 @@ import (
 	"strings"
 )
 
+// Encode returns the Becode encoding text of data.
 func Encode(data interface{}) (string, error) {
 	v := reflect.Indirect(reflect.ValueOf(data))
 	t := v.Type()
@@ -16,11 +17,11 @@ func Encode(data interface{}) (string, error) {
 
 	switch {
 	case reflect.Invalid < k && k <= reflect.Int64:
-		return EncodeInt(int(v.Int()))
+		return encodeInt(int(v.Int()))
 	case reflect.Uint <= k && k <= reflect.Uint64:
-		return EncodeInt(int(v.Uint()))
+		return encodeInt(int(v.Uint()))
 	case k == reflect.String:
-		return EncodeString(v.String())
+		return encodeString(v.String())
 	case k == reflect.Slice || k == reflect.Array:
 		return encodeSlice(v)
 	case k == reflect.Map:
@@ -32,10 +33,11 @@ func Encode(data interface{}) (string, error) {
 	}
 	return "", errors.New("encode fail")
 }
-func EncodeInt(data int) (string, error) {
+
+func encodeInt(data int) (string, error) {
 	return fmt.Sprintf("i%de", data), nil
 }
-func EncodeString(data string) (string, error) {
+func encodeString(data string) (string, error) {
 	return strings.Join([]string{strconv.Itoa(len(data)), data}, ":"), nil
 }
 func encodeSlice(v reflect.Value) (string, error) {
@@ -51,10 +53,6 @@ func encodeSlice(v reflect.Value) (string, error) {
 	ret += "e"
 
 	return ret, nil
-}
-func EncodeSlice(data interface{}) (string, error) {
-	v := reflect.Indirect(reflect.ValueOf(data))
-	return encodeSlice(v)
 }
 
 type keySli []reflect.Value
@@ -79,7 +77,7 @@ func encodeMap(v reflect.Value) (string, error) {
 		if err != nil {
 			return itemRet, err
 		}
-		keyRet, err := EncodeString(val.String())
+		keyRet, err := encodeString(val.String())
 		if err != nil {
 			return keyRet, err
 		}
@@ -87,7 +85,7 @@ func encodeMap(v reflect.Value) (string, error) {
 	}
 	return ret + "e", nil
 }
-func EncodeMap(data interface{}) (string, error) {
+func encodeMapIt(data interface{}) (string, error) {
 	v := reflect.Indirect(reflect.ValueOf(data))
 	return encodeMap(v)
 }
@@ -106,10 +104,5 @@ func encodeStruct(v reflect.Value) (string, error) {
 			m[name] = v.Field(idx).Interface()
 		}
 	}
-	return EncodeMap(m)
-}
-
-func EncodeStruct(data interface{}) (string, error) {
-	v := reflect.Indirect(reflect.ValueOf(data))
-	return encodeStruct(v)
+	return encodeMapIt(m)
 }

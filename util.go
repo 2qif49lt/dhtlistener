@@ -6,6 +6,8 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -95,4 +97,9 @@ func encodeCompactIPPortInfo(ip net.IP, port int) (info string, err error) {
 
 	info = string(append(ip, p...))
 	return
+}
+
+// genAddress returns a ip:port address.
+func genAddress(ip string, port int) string {
+	return strings.Join([]string{ip, strconv.Itoa(port)}, ":")
 }

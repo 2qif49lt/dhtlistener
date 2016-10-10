@@ -9,6 +9,13 @@ func TestHashIdSimple(t *testing.T) {
 	data := "0123456789abcdefghij"
 
 	id := newHashId(data)
+	id.len = 51
+	fmt.Println(id)
+	fmt.Println(id.RawString())
+
+	data = "0123456789"
+	id = newHashId(data)
+	id.len += 1
 	fmt.Println(id)
 	fmt.Println(id.RawString())
 }
@@ -16,10 +23,10 @@ func TestHashIdSimple(t *testing.T) {
 func TestHashIdBit(t *testing.T) {
 	data := "0123456789abcdefghij"
 	/*
-		   00110000 00110001 00110010 00110011 00110100
-	       00110101 00110110 00110111 00111000 00111001
-		   01100001 01100010 01100011 01100100 01100101
-	       01100110 01100111 01101000 01101001 01101010
+			   00110000 00110001 00110010 00110011 00110100
+		       00110101 00110110 00110111 00111000 00111001
+			   01100001 01100010 01100011 01100100 01100101
+		       01100110 01100111 01101000 01101001 01101010
 	*/
 
 	cases := []struct {
@@ -80,7 +87,7 @@ func TestHashIdXor(t *testing.T) {
 		       10011001 10011000 10010111 10010110 10010101
 	*/
 
-	halfZerohalfOne := &hashid{}
+	halfZerohalfOne := newSizeHashId(160)
 	for i := 80; i != 160; i++ {
 		halfZerohalfOne.Set(i)
 	}
@@ -105,5 +112,21 @@ func TestHashIdXor(t *testing.T) {
 		if id.Xor(rhs).RawString() != v.out {
 			t.Fatal(k, v)
 		}
+	}
+}
+
+func TestHashIdCompare(t *testing.T) {
+	halfZerohalfOne := newSizeHashId(160)
+	for i := 80; i != 160; i++ {
+		halfZerohalfOne.Set(i)
+	}
+
+	tmp := *halfZerohalfOne
+	other := &tmp
+	other.UnSet(100)
+
+	rst := halfZerohalfOne.Compare(other, 120)
+	if rst != 1 {
+		t.Fatal(rst, halfZerohalfOne, other)
 	}
 }

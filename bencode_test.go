@@ -1,7 +1,6 @@
 package dhtlistener
 
 import (
-	"fmt"
 	"reflect"
 	"testing"
 )
@@ -18,7 +17,7 @@ func TestEncodeInt(t *testing.T) {
 	}
 
 	for idx := 0; idx != len(cases); idx++ {
-		if str, err := EncodeInt(cases[idx].in); err == nil {
+		if str, err := encodeInt(cases[idx].in); err == nil {
 			if str != cases[idx].out {
 				t.Fatal(idx, str)
 			}
@@ -37,7 +36,7 @@ func TestEncodeString(t *testing.T) {
 	}
 
 	for idx := 0; idx != len(cases); idx++ {
-		if str, err := EncodeString(cases[idx].in); err == nil {
+		if str, err := encodeString(cases[idx].in); err == nil {
 			if str != cases[idx].out {
 				t.Fatal(idx, str)
 			}
@@ -58,7 +57,8 @@ func TestEncodeSlice(t *testing.T) {
 	}
 
 	for idx := 0; idx != len(cases); idx++ {
-		if str, err := EncodeSlice(cases[idx].in); err == nil {
+		v := reflect.Indirect(reflect.ValueOf(cases[idx].in))
+		if str, err := encodeSlice(v); err == nil {
 			if str != cases[idx].out {
 				t.Fatal(idx, str)
 			}
@@ -76,8 +76,9 @@ func TestEncodeMap(t *testing.T) {
 	in["list"] = []string{"abc", "def"}
 
 	out := "d2:id8:identify4:listl3:abc3:defe1:q4:ping1:ti123ee"
-	if str, err := EncodeMap(in); err == nil {
-		fmt.Println(str, out)
+	v := reflect.Indirect(reflect.ValueOf(in))
+
+	if str, err := encodeMap(v); err == nil {
 		if str != out {
 			t.Fatal(str)
 		}
@@ -100,8 +101,9 @@ func TestEncodeStruct(t *testing.T) {
 	}
 
 	out := "d2:id8:identify4:listl3:abc3:defe1:q4:ping1:ti123ee"
-	if str, err := EncodeStruct(in); err == nil {
-		fmt.Println(str, out)
+	v := reflect.Indirect(reflect.ValueOf(in))
+
+	if str, err := encodeStruct(v); err == nil {
 		if str != out {
 			t.Fatal(str)
 		}
@@ -142,7 +144,6 @@ func TestEncodeTop(t *testing.T) {
 
 	for idx := 0; idx != len(cases); idx++ {
 		if str, err := Encode(cases[idx].in); err == nil {
-			fmt.Println(str, cases[idx].out)
 			if str != cases[idx].out {
 				t.Fatal(idx, str)
 			}
@@ -150,6 +151,41 @@ func TestEncodeTop(t *testing.T) {
 			t.Fatal(idx, err)
 		}
 	}
+}
+func TestEncodeComplex(t *testing.T) {
+	type testdecodest struct {
+		Q  string         `json:"q"`
+		Id string         `json:"id"`
+		T  string         `json:"t"`
+		W  int            `json:"who"`
+		A  int            `json:"age"`
+		L  []interface{}  `json:"lt"`
+		M  map[string]int `json:"mp"`
+		S  struct {
+			When  int    `json:"when"`
+			Where string `json:"where"`
+		} `json:"embed"`
+	}
+	in := testdecodest{
+		"ping",
+		"identify",
+		"123",
+		42,
+		36,
+		[]interface{}{1, "items"},
+		map[string]int{"peoples": 1, "citys": 2},
+		struct {
+			When  int    `json:"when"`
+			Where string `json:"where"`
+		}{3, "where"},
+	}
+	expect := "d3:agei36e5:embedd4:wheni3e5:where5:wheree2:id8:identify2:ltli1e5:itemse2:mpd5:citysi2e7:peoplesi1ee1:q4:ping1:t3:1233:whoi42ee"
+
+	out, err := Encode(in)
+	if err != nil || out != expect {
+		t.Fatal(expect, out)
+	}
+	t.Log(out, err)
 }
 
 func TestFindFirstNode(t *testing.T) {
@@ -164,12 +200,12 @@ func TestFindFirstNode(t *testing.T) {
 	}
 }
 
-func TestDecodex(t *testing.T) {
+func TestDecode(t *testing.T) {
 	in := "12:hello,中国"
 	expect := "hello,中国"
 
 	out := ""
-	err := decodex([]byte(in), &out)
+	err := Decode([]byte(in), &out)
 	if err != nil || expect != out {
 		t.Fatal(out, err, expect)
 	}
@@ -178,7 +214,7 @@ func TestDecodex(t *testing.T) {
 	expect1 := uint32(42)
 
 	out1 := uint32(0)
-	err = decodex([]byte(in1), &out1)
+	err = Decode([]byte(in1), &out1)
 	if err != nil || expect1 != out1 {
 		t.Fatal(out1, err, expect1)
 	}
@@ -187,7 +223,7 @@ func TestDecodex(t *testing.T) {
 	expect2 := []int{42, 36}
 
 	out2 := []int{}
-	err = decodex([]byte(in2), &out2)
+	err = Decode([]byte(in2), &out2)
 
 	if err != nil {
 		t.Fatal(out2, err)
@@ -201,7 +237,7 @@ func TestDecodex(t *testing.T) {
 	expect3 := []string{"hello,中国", "spam"}
 
 	out3 := []string{}
-	err = decodex([]byte(in3), &out3)
+	err = Decode([]byte(in3), &out3)
 
 	if err != nil {
 		t.Fatal(out3, err)
@@ -216,12 +252,12 @@ func TestDecodex(t *testing.T) {
 
 	//	out4 := make(map[string]string)
 	out4 := map[string]string{}
-	err = decodex([]byte(in4), &out4)
+	err = Decode([]byte(in4), &out4)
 
 	if err != nil {
 		t.Fatal(out4, err)
 	}
-	fmt.Println(out4)
+	t.Log(out4)
 
 	if reflect.DeepEqual(out4, expect4) == false {
 		t.Fatal(expect4, out4)
@@ -239,14 +275,129 @@ func TestDecodex(t *testing.T) {
 		"123",
 	}
 	out5 := testdecodest{}
-	err = decodex([]byte(in5), &out5)
+	err = Decode([]byte(in5), &out5)
 
 	if err != nil {
 		t.Fatal(out5, err)
 	}
-	fmt.Println(out5)
+	t.Log(out5)
 
 	if reflect.DeepEqual(out5, expect5) == false {
 		t.Fatal(expect5, out5)
 	}
+}
+
+func TestDecodeCombin(t *testing.T) {
+	in2 := "li42ei36e4:spame"
+	expect2 := []interface{}{42, 36, "spam"}
+
+	out2 := []interface{}{}
+	err := Decode([]byte(in2), &out2)
+
+	if err != nil {
+		t.Fatal(out2, err)
+	}
+
+	if reflect.DeepEqual(out2, expect2) == false {
+		t.Fatal(expect2, out2)
+	}
+	t.Log(expect2, out2)
+
+	in3 := "l12:hello,中国4:spami42ei36ee"
+	expect3 := []interface{}{"hello,中国", "spam", 42, 36}
+
+	out3 := []interface{}{}
+	err = Decode([]byte(in3), &out3)
+
+	if err != nil {
+		t.Fatal(out3, err)
+	}
+
+	if reflect.DeepEqual(out3, expect3) == false {
+		t.Fatal(expect3, out3)
+	}
+	t.Log(expect3, out3)
+
+	in4 := "d3:bar4:spam3:foo3:abc3:whoi42e3:agei36ee"
+	expect4 := map[string]interface{}{"bar": "spam", "foo": "abc", "who": 42, "age": 36}
+
+	out4 := map[string]interface{}{}
+	err = Decode([]byte(in4), &out4)
+
+	if err != nil {
+		t.Fatal(out4, err)
+	}
+
+	if reflect.DeepEqual(out4, expect4) == false {
+		t.Fatal(expect4, out4)
+	}
+	t.Log(expect4, out4)
+
+	in5 := "d2:id8:identify1:q4:ping1:t3:1233:whoi42e3:agei36e"
+	type testdecodest struct {
+		Q  string `json:"q"`
+		Id string `json:"id"`
+		T  string `json:"t"`
+		W  int    `json:"who"`
+		A  int    `json:"age"`
+	}
+	expect5 := testdecodest{
+		"ping",
+		"identify",
+		"123",
+		42,
+		36,
+	}
+	out5 := testdecodest{}
+	err = Decode([]byte(in5), &out5)
+
+	if err != nil {
+		t.Fatal(out5, err)
+	}
+
+	if reflect.DeepEqual(out5, expect5) == false {
+		t.Fatal(expect5, out5)
+	}
+	t.Log(expect5, out5)
+}
+
+func TestDecodeComplex(t *testing.T) {
+	in5 := "d3:agei36e5:embedd4:wheni3e5:where5:wheree2:id8:identify2:ltli1e5:itemse2:mpd5:citysi2e7:peoplesi1ee1:q4:ping1:t3:1233:whoi42ee"
+	type testdecodest struct {
+		Q  string         `json:"q"`
+		Id string         `json:"id"`
+		T  string         `json:"t"`
+		W  int            `json:"who"`
+		A  int            `json:"age"`
+		L  []interface{}  `json:"lt"`
+		M  map[string]int `json:"mp"`
+		S  struct {
+			When  int    `json:"when"`
+			Where string `json:"where"`
+		} `json:"embed"`
+	}
+	expect5 := testdecodest{
+		"ping",
+		"identify",
+		"123",
+		42,
+		36,
+		[]interface{}{1, "items"},
+		map[string]int{"peoples": 1, "citys": 2},
+		struct {
+			When  int    `json:"when"`
+			Where string `json:"where"`
+		}{3, "where"},
+	}
+	out5 := testdecodest{}
+	err := Decode([]byte(in5), &out5)
+
+	if err != nil {
+		t.Fatal(out5, err)
+	}
+
+	if reflect.DeepEqual(out5, expect5) == false {
+		t.Fatal(expect5, out5)
+	}
+	t.Log(expect5, out5)
 }

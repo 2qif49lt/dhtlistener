@@ -12,6 +12,17 @@ const (
 // hashid holds information about node id
 type hashid struct {
 	data [hash_size]byte
+	len  int
+}
+
+func newSizeHashId(size int) *hashid {
+	if size > hash_size*8 {
+		panic("size is  bigger than 160")
+	}
+	ret := &hashid{}
+	ret.len = size
+
+	return ret
 }
 
 // newHashId takes string parameter and returns a hashid point
@@ -21,19 +32,20 @@ func newHashId(data string) *hashid {
 
 // newHashId takes byte slice parameter and returns a hashid point
 func newHashIdFromBytes(data []byte) *hashid {
-	if len(data) != hash_size {
-		panic("data length is not 20")
+	if len(data) > hash_size {
+		panic("data length is bigger than 20")
 	}
 
 	id := &hashid{}
 	copy(id.data[:], data)
+	id.len = len(data) * 8
 
 	return id
 }
 
 // Bit returns the idx-th position's bit, 0 or 1
 func (h *hashid) Bit(idx int) int {
-	if idx >= 8*hash_size {
+	if idx >= h.len {
 		panic("index is out of range")
 	}
 
@@ -43,7 +55,7 @@ func (h *hashid) Bit(idx int) int {
 
 // set sets the idx-th postions's bit to bit value
 func (h *hashid) set(idx, bit int) {
-	if idx >= 8*hash_size {
+	if idx >= h.len {
 		panic("index is out of range")
 	}
 
@@ -79,7 +91,11 @@ func (h *hashid) UnSet(idx int) {
 
 // Xor returns xor value of two hashid
 func (h *hashid) Xor(rhs *hashid) *hashid {
-	ret := &hashid{}
+	if h.len != rhs.len {
+		panic("size not the same")
+	}
+
+	ret := newSizeHashId(h.len)
 
 	for k, _ := range h.data {
 		ret.data[k] = h.data[k] ^ rhs.data[k]
@@ -88,11 +104,55 @@ func (h *hashid) Xor(rhs *hashid) *hashid {
 	return ret
 }
 
-func (h *hashid) String() string {
-	arr := [20]string{}
+// Compare compares the prefixLen-prefix of two bitmap.
+//   - If bitmap.data[:prefixLen] < other.data[:prefixLen], return -1.
+//   - If bitmap.data[:prefixLen] > other.data[:prefixLen], return 1.
+//   - Otherwise return 0.
+func (h *hashid) Compare(other *hashid, prefixLen int) int {
+	if prefixLen > h.len || prefixLen > other.len {
+		panic("index out of range")
+	}
+	div, mod := prefixLen/8, prefixLen%8
 
-	for k, v := range h.data {
+	for i := 0; i < div; i++ {
+		if h.data[i] > other.data[i] {
+			return 1
+		} else if h.data[i] < other.data[i] {
+			return -1
+		}
+	}
+
+	for i := div * 8; i < div*8+mod; i++ {
+		bit1, bit2 := h.Bit(i), other.Bit(i)
+		if bit1 > bit2 {
+			return 1
+		} else if bit1 < bit2 {
+			return -1
+		}
+	}
+
+	return 0
+}
+
+func (h *hashid) String() string {
+	div, mod := h.len/8, h.len%8
+	var arr []string
+	if mod > 0 {
+		arr = make([]string, div+1)
+	} else {
+		arr = make([]string, div)
+	}
+
+	for k := 0; k != div; k++ {
+		v := h.data[k]
 		arr[k] = fmt.Sprintf("%08b", v)
+	}
+	if mod > 0 {
+		modbin := ""
+		for k := div * 8; k != div*8+mod; k++ {
+			modbin += fmt.Sprintf("%d", h.Bit(k))
+		}
+		arr[div] = modbin
 	}
 
 	return strings.Join(arr[:], " ")

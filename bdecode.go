@@ -38,7 +38,9 @@ func getInt(data []byte) (num int, err error) {
 
 	return
 }
-func decodex(data []byte, v interface{}) error {
+
+// Decode reads the Becode-encoded text from data,stores in the value pointed to by  v
+func Decode(data []byte, v interface{}) error {
 	rv := reflect.ValueOf(v)
 	if rv.Kind() != reflect.Ptr || rv.IsNil() {
 		return fmt.Errorf("type dont support expect ptr, now:%s", rv.Kind())
@@ -80,7 +82,7 @@ func decodex(data []byte, v interface{}) error {
 			}
 			elemVal := reflect.New(ek)
 			elemit := elemVal.Interface()
-			err = decodex(data[idx:end+1], elemit)
+			err = Decode(data[idx:end+1], elemit)
 			if err != nil {
 				return err
 			}
@@ -125,24 +127,28 @@ func decodex(data []byte, v interface{}) error {
 				keyval.SetString(keystr)
 			} else {
 				if rk == reflect.Map {
+					if rv.IsNil() {
+						rv.Set(reflect.MakeMap(reflect.MapOf(rv.Type().Key(),
+							rv.Type().Elem())))
+					}
 					elemVal := reflect.New(rv.Type().Elem())
 					elemit := elemVal.Interface()
-					err = decodex(data[idx:end+1], elemit)
+					err = Decode(data[idx:end+1], elemit)
 					if err != nil {
 						return err
 					}
+
 					rv.SetMapIndex(keyval, elemVal.Elem())
 				} else {
 					fieldType, fname, ok := findStructFieldName(rv, key)
-					fmt.Println(fieldType.Kind(), ok, fname)
 					if ok {
 						fieldVal := rv.FieldByName(fname)
+
 						if fieldVal.IsValid() {
 							newFieldVal := reflect.New(fieldType)
 							fieldit := newFieldVal.Interface()
 
-							err = decodex(data[idx:end+1], fieldit)
-							fmt.Println(fieldVal.String())
+							err = Decode(data[idx:end+1], fieldit)
 							fieldVal.Set(newFieldVal.Elem())
 							if err != nil {
 								return err
@@ -162,7 +168,11 @@ func decodex(data []byte, v interface{}) error {
 		if err != nil {
 			return err
 		}
-		rv.SetString(str)
+		if rk == reflect.Interface {
+			rv.Set(reflect.ValueOf(str))
+		} else {
+			rv.SetString(str)
+		}
 	}
 
 	return nil
@@ -190,7 +200,7 @@ func findFirstNode(data []byte, start int) (typeid, end int, err error) {
 	idx := start
 	size := len(data)
 
-	s := NewStack()
+	s := newStack()
 
 	for idx != size {
 		switch data[idx] {

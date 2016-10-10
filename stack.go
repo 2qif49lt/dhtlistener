@@ -10,23 +10,23 @@ type stacknode struct {
 	value *typeIdx
 	next  *stacknode
 }
-type Stack struct {
+type stack struct {
 	top  *stacknode
 	size int
 }
 
-func NewStack() *Stack {
-	return &Stack{
+func newStack() *stack {
+	return &stack{
 		top:  nil,
 		size: 0,
 	}
 }
 
-func (s *Stack) Size() int {
+func (s *stack) Size() int {
 	return s.size
 }
 
-func (s *Stack) Push(v *typeIdx) {
+func (s *stack) Push(v *typeIdx) {
 	n := &stacknode{
 		value: v,
 		next:  s.top,
@@ -35,7 +35,7 @@ func (s *Stack) Push(v *typeIdx) {
 	s.size++
 }
 
-func (s *Stack) Pop() *typeIdx {
+func (s *stack) Pop() *typeIdx {
 	if s.size == 0 {
 		return nil
 	}
@@ -45,7 +45,7 @@ func (s *Stack) Pop() *typeIdx {
 	return n.value
 }
 
-func (s *Stack) Peek() *typeIdx {
+func (s *stack) Peek() *typeIdx {
 	if s.size == 0 {
 		return nil
 	}
