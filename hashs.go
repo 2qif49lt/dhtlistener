@@ -161,3 +161,15 @@ func (h *hashid) String() string {
 func (h *hashid) RawString() string {
 	return string(h.data[:])
 }
+
+func (h *hashid) PrefixLen() int {
+	for idx := 0; idx != h.len; idx++ {
+		for idxbit := 0; idxbit != 8; idxbit++ {
+			if h.data[idx]&(0x1<<(7-idxbit)) != 0 {
+				return idx*8 + idxbit
+			}
+		}
+	}
+
+	return h.len*8 - 1
+}

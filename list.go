@@ -14,18 +14,26 @@ func newSyncList() *syncList {
 	return &syncList{&sync.RWMutex{}, list.New()}
 }
 
-func (sl *syncList) Back() *list.Element {
+func (sl *syncList) Back() interface{} {
 	sl.RLock()
 	defer sl.RUnlock()
 
-	return sl.lst.Back()
+	if sl.lst.Len() == 0 {
+		return nil
+	}
+
+	return sl.lst.Back().Value
 }
 
-func (sl *syncList) Front() *list.Element {
+func (sl *syncList) Front() interface{} {
 	sl.RLock()
 	defer sl.RUnlock()
 
-	return sl.lst.Front()
+	if sl.lst.Len() == 0 {
+		return nil
+	}
+
+	return sl.lst.Front().Value
 }
 
 func (sl *syncList) InsertAfter(v interface{}, mark *list.Element) *list.Element {
@@ -102,4 +110,16 @@ func (sl *syncList) Iter() <-chan *list.Element {
 	}()
 
 	return ch
+}
+
+func (sl *syncList) Has(val interface{}) *list.Element {
+	sl.RLock()
+	defer sl.RUnlock()
+
+	for e := sl.lst.Front(); e != nil; e = e.Next() {
+		if e.Value == val {
+			return e
+		}
+	}
+	return nil
 }
