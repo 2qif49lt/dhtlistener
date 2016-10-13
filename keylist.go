@@ -3,6 +3,7 @@ package dhtlistener
 import (
 	"container/list"
 	"sync"
+	"time"
 )
 
 type keylist struct {
@@ -47,6 +48,7 @@ func (kl *keylist) Push(key, val interface{}) {
 
 	e = kl.PushBack(val)
 	kl.keyMap[key] = e
+
 }
 
 func (kl *keylist) Remove(key interface{}) interface{} {

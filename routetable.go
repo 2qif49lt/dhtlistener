@@ -1,21 +1,19 @@
 package dhtlistener
 
 import (
+	"sort"
 	"sync"
 	"time"
 )
 
 type routetable struct {
-	*sync.RWMutex
 	dht     *DHT
-	me      *node
 	buckets [hash_size * 8]*newKeyList // rawstring:*node
 }
 
-func newRouteTable(me *node) *routetable {
+func newRouteTable(dht *DHT) *routetable {
 	ret := &routetable{
-		&sync.RWMutex,
-		me,
+		dht,
 	}
 
 	for idx := 0; idx != len(ret.buckets); idx++ {
@@ -26,33 +24,27 @@ func newRouteTable(me *node) *routetable {
 }
 
 func (rt *routetable) update(n *node) {
-	rt.Lock()
-	defer rt.Unlock()
+	prefix_len := n.id.Xor(rt.dht.me.id).PrefixLen()
+	bucket := rt.buckets[prefix_len]
 
-	prefix_len := n.id.Xor(rt.me.id).PrefixLen()
-	lst := rt.buckets[prefix_len]
-
-	if lst.Has(n.id.RawString()) {
-		lst.Remove(n.id.RawString())
-		lst.Push(n.id.RawString(), n)
+	if bucket.Has(n.id.RawString()) {
+		bucket.Remove(n.id.RawString())
+		bucket.Push(n.id.RawString(), n)
 	} else {
-		if lst.Len() < rt.dht.K {
-			lst.Push(n.id.RawString(), n)
+		if bucket.Len() < rt.dht.K {
+			bucket.Push(n.id.RawString(), n)
 		} else {
 			go func(l *newKeyList) {
 				// ping bucket
-			}(lst)
+			}(bucket)
 		}
 	}
 }
 
-func (rt *routetable) FindClosest(tar *hashid, size int) []*node {
-	rt.RLock()
-	defer rt.RUnlock()
-
+func (rt *routetable) FindClosestNode(tar *hashid, size int) []*node {
 	ret := make([]*node, 0)
 
-	bucket_num := tar.Xor(rt.me.id).PrefixLen()
+	bucket_num := tar.Xor(rt.dht.me.id).PrefixLen()
 	bucket := rt.buckets[bucket_num]
 
 	bucket.Foreach(func(it interface{}) bool {
@@ -61,7 +53,55 @@ func (rt *routetable) FindClosest(tar *hashid, size int) []*node {
 		return true
 	})
 
-	for i := 1; (bucket_num-1 >= 0 || bucket_num+1 < len(rt.buckets)) && len(ret) < size; i++ {
+	for i := 1; (bucket_num-i >= 0 || bucket_num+i < len(rt.buckets)) && len(ret) < size; i++ {
+		if bucket_num-i >= 0 {
+			bucket = rt.buckets[bucket_num-i]
+			bucket.Foreach(func(it interface{}) bool {
+				n := it.(*node)
+				ret = append(ret, n)
+				return true
+			})
+		}
+		if bucket_num+i < len(rt.buckets) {
+			bucket = rt.buckets[bucket_num+i]
+			bucket.Foreach(func(it interface{}) bool {
+				n := it.(*node)
+				ret = append(ret, n)
+				return true
+			})
+		}
+	}
+	sort.Sort(sortNodeById(ret))
+
+	return ret
+}
+
+func (rt *routetable) GetClosestNodeCompactInfo(tar *hashid, size int) []string {
+	nodes := rt.FindClosestNode(tar, size)
+	infos := make([]string, len(nodes))
+
+	for k, v := range nodes {
+		infos[k] = v.CompactNodeInfo()
+	}
+	return infos
+}
+
+func (rt *routetable) Remove(tar *hashid) {
+	bucket_num := tar.Xor(rt.dht.me.id).PrefixLen()
+	bucket := rt.buckets[bucket_num]
+
+	bucket.Remove(tar.RawString())
+}
+
+func (rt *routetable) Flush() {
+	for idx, bucket := range rt.buckets {
+
+		bucket.Foreach(func(it interface{}) bool {
+			n := it.(*node)
+			newid := newSubRandHashIdFromIdSize(rt.dht.me.id, idx)
+
+			// go find node
+		})
 
 	}
 }

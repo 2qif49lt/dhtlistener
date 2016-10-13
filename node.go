@@ -28,6 +28,10 @@ func newNode(id, network, address string) (*node, error) {
 	return &node{newHashId(id), addr, time.Now()}, nil
 }
 
+func newRandomNodeFromUdpAddr(addr *net.UDPAddr) *node {
+	return &node{newHashId(GetRandString(20)), addr, time.Now()}
+}
+
 // newNodeFromCompactInfo parses compactNodeInfo and returns a node pointer.
 func newNodeFromCompactInfo(
 	compactNodeInfo string, network string) (*node, error) {
@@ -55,4 +59,31 @@ func (node *node) CompactNodeInfo() string {
 	return strings.Join([]string{
 		node.id.RawString(), node.CompactIPPortInfo(),
 	}, "")
+}
+
+type sortNodeByTime []*node
+
+func (st sortNodeByTime) Len() int {
+	return len(st)
+}
+
+func (st sortNodeByTime) Swap(i, j int) {
+	st[i], st[j] = st[j], st[i]
+}
+func (st sortNodeByTime) Less(i, j int) bool {
+	return st[i].lastActiveTime.Before(st[j].lastActiveTime)
+}
+
+type sortNodeById []*node
+
+func (st sortNodeById) Len() int {
+	return len(st)
+}
+
+func (st sortNodeById) Swap(i, j int) {
+	st[i], st[j] = st[j], st[i]
+}
+
+func (st sortNodeById) Less(i, j int) bool {
+	return st[i].id.Compare(st[j].id, st[i].id.len) == -1
 }

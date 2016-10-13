@@ -43,6 +43,37 @@ func newHashIdFromBytes(data []byte) *hashid {
 	return id
 }
 
+// newSubRandHashIdFromIdSize take another hasdid and prefix size parameter returns a new hashid poing
+func newSubRandHashIdFromIdSize(other *hashid, size int) *hashid {
+	if size > hash_size*8 {
+		panic("prefix size is invaild")
+	}
+	div, mod := size/8, size%8
+
+	ret := newSizeHashId(size)
+
+	for idx := 0; idx != div; div++ {
+		ret.data[idx] = other.data[idx]
+	}
+	if mod != 0 {
+		rd := GetRandString(hash_size - div)
+
+		for idx := 0; div != hash_size; div++ {
+			ret.data[div] = rd[idx]
+			idx++
+		}
+
+		for idx := 0; idx != mod; idx++ {
+			if other.Bit(div*8+idx) == 1 {
+				ret.Set(div*8 + idx)
+			} else {
+				ret.UnSet(div*8 + idx)
+			}
+		}
+	}
+	return ret
+}
+
 // Bit returns the idx-th position's bit, 0 or 1
 func (h *hashid) Bit(idx int) int {
 	if idx >= h.len {
