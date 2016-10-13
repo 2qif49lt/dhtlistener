@@ -10,6 +10,7 @@ type DHT struct {
 	me   *node
 	addr string
 	conn *net.UDPConn
+	Try  int
 
 	rt     *routetable
 	peers  *peersManager
@@ -52,6 +53,7 @@ func NewDht(addr string) *DHT {
 		me:     me,
 		addr:   addr,
 		conn:   udp_conn,
+		Try:    2,
 		tokens: newTokenMgr(),
 	}
 
