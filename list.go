@@ -64,6 +64,15 @@ func (sl *syncList) PushFront(v interface{}) *list.Element {
 	return sl.lst.PushFront(v)
 }
 
+func (sl *syncList) RemoveFront() interface{} {
+	sl.Lock()
+	defer sl.Unlock()
+
+	ret := sl.lst.Front().Value
+
+	sl.lst.Remove(sl.lst.Front())
+	return ret
+}
 func (sl *syncList) Remove(e *list.Element) interface{} {
 	sl.Lock()
 	defer sl.Unlock()

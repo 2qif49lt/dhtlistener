@@ -3,7 +3,6 @@ package dhtlistener
 import (
 	"container/list"
 	"sync"
-	"time"
 )
 
 type keylist struct {

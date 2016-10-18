@@ -2,18 +2,16 @@ package dhtlistener
 
 import (
 	"sort"
-	"sync"
-	"time"
 )
 
 type routetable struct {
 	dht     *DHT
-	buckets [hash_size * 8]*newKeyList // rawstring:*node
+	buckets [hash_size * 8]*keylist // rawstring:*node
 }
 
 func newRouteTable(dht *DHT) *routetable {
 	ret := &routetable{
-		dht,
+		dht: dht,
 	}
 
 	for idx := 0; idx != len(ret.buckets); idx++ {
@@ -23,7 +21,7 @@ func newRouteTable(dht *DHT) *routetable {
 	return ret
 }
 
-func (rt *routetable) update(n *node) {
+func (rt *routetable) Update(n *node) {
 	prefix_len := n.id.Xor(rt.dht.me.id).PrefixLen()
 	bucket := rt.buckets[prefix_len]
 
@@ -34,13 +32,25 @@ func (rt *routetable) update(n *node) {
 		if bucket.Len() < rt.dht.K {
 			bucket.Push(n.id.RawString(), n)
 		} else {
-			go func(l *newKeyList) {
+			go func(l *keylist) {
 				// ping bucket
 			}(bucket)
 		}
 	}
 }
 
+func (rt *routetable) getNode(h string) *node {
+	for _, v := range rt.buckets {
+		if n, exist := v.Get(h); exist {
+			if n.(*node).id.RawString() == h {
+				return n.(*node)
+			} else {
+				return nil
+			}
+		}
+	}
+	return nil
+}
 func (rt *routetable) FindClosestNode(tar *hashid, size int) []*node {
 	ret := make([]*node, 0)
 
@@ -72,7 +82,9 @@ func (rt *routetable) FindClosestNode(tar *hashid, size int) []*node {
 		}
 	}
 	sort.Sort(sortNodeById(ret))
-
+	if len(ret) > size {
+		ret = ret[:size]
+	}
 	return ret
 }
 
@@ -93,15 +105,25 @@ func (rt *routetable) Remove(tar *hashid) {
 	bucket.Remove(tar.RawString())
 }
 
-func (rt *routetable) Flush() {
+func (rt *routetable) Fresh() {
 	for idx, bucket := range rt.buckets {
 
 		bucket.Foreach(func(it interface{}) bool {
 			n := it.(*node)
 			newid := newSubRandHashIdFromIdSize(rt.dht.me.id, idx)
 
+			_, _ = n, newid
 			// go find node
+			return true
 		})
 
 	}
+}
+
+func (rt *routetable) Len() int {
+	ret := 0
+	for _, bucket := range rt.buckets {
+		ret += bucket.Len()
+	}
+	return ret
 }

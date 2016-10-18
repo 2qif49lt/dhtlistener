@@ -66,7 +66,7 @@ func (pm *peersManager) Insert(infoHash string, peer *Peer) {
 
 	queue.PushBack(peer)
 	if queue.Len() > pm.dht.K {
-		queue.Remove(queue.Front())
+		queue.RemoveFront()
 	}
 }
 
