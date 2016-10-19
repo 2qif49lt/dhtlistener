@@ -17,6 +17,7 @@ type DHT struct {
 	works          chan struct{}
 	rt             *routetable
 	peers          *peersManager
+	transacts      *transactionManager
 	tokens         *tokenMgr
 	OnGetPeers     func(string, string, int)
 	OnAnnouncePeer func(string, string, int)
@@ -77,6 +78,7 @@ func NewDht(addr string) *DHT {
 func (dht *DHT) init() {
 	dht.rt = newRouteTable(dht)
 	dht.peers = newPeersManager(dht)
+	dht.transacts = newTransactionManager(dht)
 }
 
 func (dht *DHT) srv() {

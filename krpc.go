@@ -183,8 +183,7 @@ func (tm *transactionManager) getByIndex(index string) *transaction {
 	return tm.transaction(index, 1)
 }
 
-// transaction gets the proper transaction with whose id is transId and
-// address is addr.
+// transaction gets the proper transaction with whose id is transId and address is addr.
 func (tm *transactionManager) filterOne(transID string, addr *net.UDPAddr) *transaction {
 
 	trans := tm.getByTransID(transID)
@@ -430,7 +429,7 @@ func handleRequest(dht *DHT, addr *net.UDPAddr, response map[string]interface{})
 		if peers := dht.peers.GetPeers(infoHash, dht.K); len(peers) > 0 {
 			// donot reply
 		} else {
-			targetID := newHashId(target)
+			targetID := newHashId(infoHash)
 			send(dht, addr, makeResponse(t, map[string]interface{}{
 				"id":    dht.me.id.RawString(),
 				"token": dht.tokens.getToken(addr),
@@ -463,12 +462,8 @@ func handleRequest(dht *DHT, addr *net.UDPAddr, response map[string]interface{})
 			port = addr.Port
 		}
 
-		if dht.IsStandardMode() {
+		if false {
 			dht.peers.Insert(infoHash, newPeer(addr.IP, port, token))
-
-			send(dht, addr, makeResponse(t, map[string]interface{}{
-				"id": dht.id(id),
-			}))
 		}
 
 		if dht.OnAnnouncePeer != nil {
@@ -479,15 +474,14 @@ func handleRequest(dht *DHT, addr *net.UDPAddr, response map[string]interface{})
 	}
 
 	no, _ := newNode(id, addr.Network(), addr.String())
-	dht.rt.Update(no)
+	dht.rt.Insert(no)
 	return true
 }
 
 // findOn puts nodes in the response to the routingTable, then if target is in
 // the nodes or all nodes are in the routingTable, it stops. Otherwise it
 // continues to findNode or getPeers.
-func findOn(dht *DHT, r map[string]interface{}, target *bitmap,
-	queryType string) error {
+func findOn(dht *DHT, r map[string]interface{}, target *hashid, queryType string) error {
 
 	if err := parseKey(r, "nodes", "string"); err != nil {
 		return err
@@ -500,14 +494,13 @@ func findOn(dht *DHT, r map[string]interface{}, target *bitmap,
 
 	hasNew, found := false, false
 	for i := 0; i < len(nodes)/26; i++ {
-		no, _ := newNodeFromCompactInfo(
-			string(nodes[i*26:(i+1)*26]), dht.Network)
+		no, _ := newNodeFromCompactInfo(string(nodes[i*26 : (i+1)*26]))
 
 		if no.id.RawString() == target.RawString() {
 			found = true
 		}
 
-		if dht.routingTable.Insert(no) {
+		if dht.rt.Insert(no) {
 			hasNew = true
 		}
 	}
@@ -517,12 +510,12 @@ func findOn(dht *DHT, r map[string]interface{}, target *bitmap,
 	}
 
 	targetID := target.RawString()
-	for _, no := range dht.routingTable.GetNeighbors(target, dht.K) {
+	for _, no := range dht.rt.FindClosestNode(target, dht.K) {
 		switch queryType {
 		case findNodeType:
-			dht.transactionManager.findNode(no, targetID)
+			dht.transacts.findNode(no, targetID)
 		case getPeersType:
-			dht.transactionManager.getPeers(no, targetID)
+			dht.transacts.getPeers(no, targetID)
 		default:
 			panic("invalid find type")
 		}
@@ -531,12 +524,11 @@ func findOn(dht *DHT, r map[string]interface{}, target *bitmap,
 }
 
 // handleResponse handles responses received from udp.
-func handleResponse(dht *DHT, addr *net.UDPAddr,
-	response map[string]interface{}) (success bool) {
+func handleResponse(dht *DHT, addr *net.UDPAddr, response map[string]interface{}) (success bool) {
 
 	t := response["t"].(string)
 
-	trans := dht.transactionManager.filterOne(t, addr)
+	trans := dht.transacts.filterOne(t, addr)
 	if trans == nil {
 		return
 	}
@@ -556,11 +548,7 @@ func handleResponse(dht *DHT, addr *net.UDPAddr,
 
 	id := r["id"].(string)
 
-	// If response's node id is not the same with the node id in the
-	// transaction, raise error.
-	if trans.node.id != nil && trans.node.id.RawString() != r["id"].(string) {
-		dht.blackList.insert(addr.IP.String(), addr.Port)
-		dht.routingTable.RemoveByAddr(addr.String())
+	if trans.tar.id != nil && trans.tar.id.RawString() != id {
 		return
 	}
 
@@ -577,7 +565,7 @@ func handleResponse(dht *DHT, addr *net.UDPAddr,
 		}
 
 		target := trans.data["a"].(map[string]interface{})["target"].(string)
-		if findOn(dht, r, newBitmapFromString(target), findNodeType) != nil {
+		if findOn(dht, r, newHashId(target), findNodeType) != nil {
 			return
 		}
 	case getPeersType:
@@ -595,10 +583,9 @@ func handleResponse(dht *DHT, addr *net.UDPAddr,
 				if err != nil {
 					continue
 				}
-				dht.peersManager.Insert(infoHash, p)
+				dht.peers.Insert(infoHash, p)
 			}
-		} else if findOn(
-			dht, r, newBitmapFromString(infoHash), getPeersType) != nil {
+		} else if findOn(dht, r, newHashId(infoHash), getPeersType) != nil {
 			return
 		}
 	case announcePeerType:
@@ -609,15 +596,13 @@ func handleResponse(dht *DHT, addr *net.UDPAddr,
 	// inform transManager to delete transaction.
 	trans.response <- struct{}{}
 
-	dht.blackList.delete(addr.IP.String(), addr.Port)
-	dht.routingTable.Insert(node)
+	dht.rt.Insert(node)
 
 	return true
 }
 
 // handleError handles errors received from udp.
-func handleError(dht *DHT, addr *net.UDPAddr,
-	response map[string]interface{}) (success bool) {
+func handleError(dht *DHT, addr *net.UDPAddr, response map[string]interface{}) (success bool) {
 
 	if err := parseKey(response, "e", "list"); err != nil {
 		return
@@ -627,9 +612,7 @@ func handleError(dht *DHT, addr *net.UDPAddr,
 		return
 	}
 
-	if trans := dht.transactionManager.filterOne(
-		response["t"].(string), addr); trans != nil {
-
+	if trans := dht.transacts.filterOne(response["t"].(string), addr); trans != nil {
 		trans.response <- struct{}{}
 	}
 

@@ -21,22 +21,24 @@ func newRouteTable(dht *DHT) *routetable {
 	return ret
 }
 
-func (rt *routetable) Update(n *node) {
+func (rt *routetable) Insert(n *node) bool {
 	prefix_len := n.id.Xor(rt.dht.me.id).PrefixLen()
 	bucket := rt.buckets[prefix_len]
 
 	if bucket.Has(n.id.RawString()) {
 		bucket.Remove(n.id.RawString())
 		bucket.Push(n.id.RawString(), n)
-	} else {
-		if bucket.Len() < rt.dht.K {
-			bucket.Push(n.id.RawString(), n)
-		} else {
-			go func(l *keylist) {
-				// ping bucket
-			}(bucket)
-		}
+		return false
 	}
+	if bucket.Len() < rt.dht.K {
+		bucket.Push(n.id.RawString(), n)
+		return true
+	} else {
+		go func(l *keylist) {
+			// ping bucket
+		}(bucket)
+	}
+	return false
 }
 
 func (rt *routetable) getNode(h string) *node {

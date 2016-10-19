@@ -34,7 +34,7 @@ func newRandomNodeFromUdpAddr(addr *net.UDPAddr) *node {
 
 // newNodeFromCompactInfo parses compactNodeInfo and returns a node pointer.
 func newNodeFromCompactInfo(
-	compactNodeInfo string, network string) (*node, error) {
+	compactNodeInfo string) (*node, error) {
 
 	if len(compactNodeInfo) != 26 {
 		return nil, errors.New("compactNodeInfo should be a 26-length string")
@@ -43,7 +43,7 @@ func newNodeFromCompactInfo(
 	id := compactNodeInfo[:20]
 	ip, port, _ := decodeCompactIPPortInfo(compactNodeInfo[20:])
 
-	return newNode(id, network, genAddress(ip.String(), port))
+	return newNode(id, "udp", genAddress(ip.String(), port))
 }
 
 // CompactIPPortInfo returns "Compact IP-address/port info".
