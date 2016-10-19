@@ -1,6 +1,7 @@
 package dhtlistener
 
 import (
+	"encoding/hex"
 	"net"
 	"strings"
 	"time"
@@ -101,9 +102,50 @@ func (dht *DHT) join() {
 		if err != nil {
 			continue
 		}
-		_ = raddr
-		// find_node
+		dht.transacts.findNode(
+			&node{addr: raddr},
+			dht.me.id.RawString(),
+		)
 	}
+}
+
+func (dht *DHT) GetPeers(infoHash string) ([]*Peer, error) {
+	if len(infoHash) == 40 {
+		data, err := hex.DecodeString(infoHash)
+		if err != nil {
+			return nil, err
+		}
+		infoHash = string(data)
+	}
+
+	peers := dht.peers.GetPeers(infoHash, dht.K)
+	if len(peers) != 0 {
+		return peers, nil
+	}
+
+	ch := make(chan struct{})
+
+	go func() {
+		neighbors := dht.rt.FindClosestNode(newHashId(infoHash), dht.K)
+
+		for _, no := range neighbors {
+			dht.transacts.getPeers(no, infoHash)
+		}
+
+		i := 0
+		for _ = range time.Tick(time.Second * 1) {
+			i++
+			peers = dht.peers.GetPeers(infoHash, dht.K)
+			if len(peers) != 0 || i == 30 {
+				break
+			}
+		}
+
+		ch <- struct{}{}
+	}()
+
+	<-ch
+	return peers, nil
 }
 
 func (dht *DHT) Run() {

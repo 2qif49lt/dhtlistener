@@ -2,6 +2,7 @@ package dhtlistener
 
 import (
 	"sort"
+	"strings"
 )
 
 type routetable struct {
@@ -21,6 +22,14 @@ func newRouteTable(dht *DHT) *routetable {
 	return ret
 }
 
+func (rt *routetable) FreshBucket(bucket *keylist) {
+	bucket.Foreach(func(v interface{}) bool {
+		no := v.(*node)
+		rt.dht.transacts.ping(no)
+		return true
+	})
+}
+
 func (rt *routetable) Insert(n *node) bool {
 	prefix_len := n.id.Xor(rt.dht.me.id).PrefixLen()
 	bucket := rt.buckets[prefix_len]
@@ -34,9 +43,7 @@ func (rt *routetable) Insert(n *node) bool {
 		bucket.Push(n.id.RawString(), n)
 		return true
 	} else {
-		go func(l *keylist) {
-			// ping bucket
-		}(bucket)
+		go rt.FreshBucket(bucket)
 	}
 	return false
 }
@@ -107,15 +114,36 @@ func (rt *routetable) Remove(tar *hashid) {
 	bucket.Remove(tar.RawString())
 }
 
+func (rt *routetable) RandomChildID(idx int) string {
+	div, mod := idx/8, idx%8
+
+	ret := strings.Join([]string{rt.dht.me.id.RawString()[:div],
+		GetRandString(20 - div)}, "")
+
+	id := newHashId(ret)
+
+	if mod != 0 {
+		for cur := div * 8; cur != idx; cur++ {
+			if rt.dht.me.id.Bit(cur) == 1 {
+				id.UnSet(cur)
+			} else {
+				id.Set(cur)
+			}
+		}
+	}
+
+	if rt.dht.me.id.Bit(idx) == 1 {
+		id.Set(idx)
+	} else {
+		id.UnSet(idx)
+	}
+	return id.RawString()
+}
 func (rt *routetable) Fresh() {
 	for idx, bucket := range rt.buckets {
-
 		bucket.Foreach(func(it interface{}) bool {
-			n := it.(*node)
-			newid := newSubRandHashIdFromIdSize(rt.dht.me.id, idx)
-
-			_, _ = n, newid
-			// go find node
+			no := it.(*node)
+			rt.dht.transacts.findNode(no, rt.RandomChildID(idx))
 			return true
 		})
 
