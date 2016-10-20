@@ -190,11 +190,12 @@ func TestEncodeComplex(t *testing.T) {
 
 func TestFindFirstNode(t *testing.T) {
 	in := "li1e4:spamli1ei2eee"
-	expectid, expectend := bencode_type_list, len(in)-1
-	id, end, err := findFirstNode([]byte(in), 0)
+	expectid, expectend := bencode_type_list, len(in)-1-1
+	id, end, err := findFirstNode([]byte(in), 10)
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Log(expectid, expectend)
 	if expectend != end || expectid != id {
 		t.Fatal(id, end)
 	}
